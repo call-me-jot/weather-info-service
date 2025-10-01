@@ -2,6 +2,7 @@ package org.lotlinx.interview.router;
 
 import io.vertx.core.Vertx;
 import io.vertx.ext.web.Router;
+import io.vertx.ext.web.handler.BodyHandler;
 import org.lotlinx.interview.config.ApplicationConfig;
 import org.lotlinx.interview.controller.WeatherController;
 import org.lotlinx.interview.service.WeatherService;
@@ -23,11 +24,6 @@ public class ApiRouter {
     this.weatherController = new WeatherController(weatherService);
   }
 
-  public ApiRouter(Vertx vertx, WeatherService weatherService) {
-    this.vertx = vertx;
-    this.weatherController = new WeatherController(weatherService);
-  }
-
   /**
    * Creates and configures the main API router.
    *
@@ -35,6 +31,7 @@ public class ApiRouter {
    */
   public Router createRouter() {
     Router router = Router.router(vertx);
+    router.route().handler(BodyHandler.create());
 
     // Configure routes
     setupRoutes(router);
@@ -56,10 +53,16 @@ public class ApiRouter {
         .get(ApplicationConfig.AIR_POLLUTION_ENDPOINT)
         .handler(weatherController::handleAirPollution);
 
+    // Multi-city weather endpoint
+    router
+        .post(ApplicationConfig.MULTI_CITY_WEATHER_ENDPOINT)
+        .handler(weatherController::handleMultiCityWeather);
+
     logger.debug(
-        "Routes configured: {}, {}",
+        "Routes configured: {}, {}, {}",
         ApplicationConfig.HELLO_ENDPOINT,
-        ApplicationConfig.AIR_POLLUTION_ENDPOINT);
+        ApplicationConfig.AIR_POLLUTION_ENDPOINT,
+        ApplicationConfig.MULTI_CITY_WEATHER_ENDPOINT);
   }
 
   /** Sets up global error handling for the router. */
