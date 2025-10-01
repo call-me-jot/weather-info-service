@@ -1,8 +1,9 @@
-package org.lotlinx.interview.util;
+package org.lotlinx.interview.util.impl;
 
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
+import org.lotlinx.interview.util.CircuitBreakerOperation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +47,7 @@ public class CircuitBreaker {
   /**
    * Executes an operation through the circuit breaker.
    */
-  public <T> Future<T> execute(Operation<T> operation) {
+  public <T> Future<T> execute(CircuitBreakerOperation<T> operation) {
     Promise<T> promise = Promise.promise();
 
     if (state == State.OPEN) {
@@ -129,13 +130,6 @@ public class CircuitBreaker {
     return name;
   }
 
-  /**
-   * Functional interface for operations to be executed through the circuit breaker.
-   */
-  @FunctionalInterface
-  public interface Operation<T> {
-    Future<T> execute();
-  }
 
   /**
    * Exception thrown when circuit breaker is open.
