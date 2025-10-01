@@ -18,12 +18,25 @@ public class MultiCityWeatherResponse {
   @JsonProperty("failedRequests")
   private int failedRequests;
 
+  @JsonProperty("failedCities")
+  private List<String> failedCities;
+
   public MultiCityWeatherResponse(
       List<WeatherData> weatherData, int totalCities, int successfulRequests, int failedRequests) {
     this.weatherData = weatherData;
     this.totalCities = totalCities;
     this.successfulRequests = successfulRequests;
     this.failedRequests = failedRequests;
+    this.failedCities = new java.util.ArrayList<>();
+  }
+
+  public MultiCityWeatherResponse(
+      List<WeatherData> weatherData, int totalCities, int successfulRequests, int failedRequests, List<String> failedCities) {
+    this.weatherData = weatherData;
+    this.totalCities = totalCities;
+    this.successfulRequests = successfulRequests;
+    this.failedRequests = failedRequests;
+    this.failedCities = failedCities != null ? failedCities : new java.util.ArrayList<>();
   }
 
   public List<WeatherData> getWeatherData() {
@@ -56,6 +69,14 @@ public class MultiCityWeatherResponse {
 
   public void setFailedRequests(int failedRequests) {
     this.failedRequests = failedRequests;
+  }
+
+  public List<String> getFailedCities() {
+    return failedCities;
+  }
+
+  public void setFailedCities(List<String> failedCities) {
+    this.failedCities = failedCities;
   }
 
   @Override

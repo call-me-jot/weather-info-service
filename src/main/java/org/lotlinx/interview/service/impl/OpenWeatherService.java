@@ -82,6 +82,7 @@ public class OpenWeatherService implements WeatherService {
     logger.info("Fetching weather data for {} cities: {}", cities.size(), cities);
 
     List<WeatherData> weatherDataList = new ArrayList<>();
+    List<String> failedCities = new ArrayList<>();
     AtomicInteger completedRequests = new AtomicInteger(0);
     AtomicInteger failedRequests = new AtomicInteger(0);
     int totalCities = cities.size();
@@ -96,6 +97,7 @@ public class OpenWeatherService implements WeatherService {
                 logger.debug("Successfully retrieved weather for city: {}", city);
               } else {
                 logger.warn("Failed to retrieve weather for city: {} - {}", city, ar.cause().getMessage());
+                failedCities.add(city);
                 failedRequests.incrementAndGet();
               }
 
@@ -106,7 +108,8 @@ public class OpenWeatherService implements WeatherService {
                     weatherDataList,
                     totalCities,
                     weatherDataList.size(),
-                    failedRequests.get()
+                    failedRequests.get(),
+                    failedCities
                 );
                 promise.complete(response);
               }
@@ -167,11 +170,12 @@ public class OpenWeatherService implements WeatherService {
               promise.complete(responses);
             } catch (Exception e) {
               logger.error("Failed to parse geocoding response for city: {}", cityName, e);
-              promise.fail(new RuntimeException("Failed to parse geocoding data", e));
+              promise.fail(new RuntimeException("Failed to parse geocoding data for city '" + cityName + "': " + e.getMessage(), e));
             }
           } else {
             logger.error("Failed to fetch coordinates for city: {}", cityName, ar.cause());
-            promise.fail(ar.cause());
+            String errorMessage = "Unable to retrieve coordinates for city '" + cityName + "': " + ar.cause().getMessage();
+            promise.fail(new RuntimeException(errorMessage, ar.cause()));
           }
         });
 
@@ -195,12 +199,17 @@ public class OpenWeatherService implements WeatherService {
               CurrentWeatherResponse response = parseWeatherResponse(ar.result());
               promise.complete(response);
             } catch (Exception e) {
-              logger.error("Failed to parse current weather response", e);
-              promise.fail(new RuntimeException("Failed to parse weather data", e));
+              logger.error("Failed to parse current weather response for coordinates: {}, {}", 
+                  coordinates.getLatitude(), coordinates.getLongitude(), e);
+              promise.fail(new RuntimeException("Failed to parse weather data for coordinates (" + 
+                  coordinates.getLatitude() + ", " + coordinates.getLongitude() + "): " + e.getMessage(), e));
             }
           } else {
-            logger.error("Failed to fetch current weather data", ar.cause());
-            promise.fail(ar.cause());
+            logger.error("Failed to fetch current weather data for coordinates: {}, {}", 
+                coordinates.getLatitude(), coordinates.getLongitude(), ar.cause());
+            String errorMessage = "Unable to retrieve weather data for coordinates (" + 
+                coordinates.getLatitude() + ", " + coordinates.getLongitude() + "): " + ar.cause().getMessage();
+            promise.fail(new RuntimeException(errorMessage, ar.cause()));
           }
         });
 
@@ -298,6 +307,33 @@ public class OpenWeatherService implements WeatherService {
   }
 
   /**
+   * Normalizes city name to proper case format.
+   * Options: Title Case, Sentence case, or Custom rules
+   */
+  private String normalizeCityName(String cityName) {
+    if (cityName == null || cityName.trim().isEmpty()) {
+      return cityName;
+    }
+    
+    String trimmed = cityName.trim();
+    return trimmed.substring(0, 1).toUpperCase() + trimmed.substring(1).toLowerCase();
+  }
+
+  /**
+   * Handles special city name cases (optional advanced normalization).
+   */
+  private String handleSpecialCityNames(String cityName) {
+    String normalized = cityName.substring(0, 1).toUpperCase() + cityName.substring(1).toLowerCase();
+    
+    // Handle common city name patterns
+    normalized = normalized.replaceAll("\\bSt\\b", "St.");  // St John -> St. John
+    normalized = normalized.replaceAll("\\bMt\\b", "Mt.");  // Mt Washington -> Mt. Washington
+    normalized = normalized.replaceAll("\\bFt\\b", "Ft.");  // Ft Worth -> Ft. Worth
+    
+    return normalized;
+  }
+
+  /**
    * Maps CurrentWeatherResponse to WeatherData.
    */
   private WeatherData mapToWeatherData(String cityName, CurrentWeatherResponse weatherResponse, Coordinates coordinates) {
@@ -310,8 +346,11 @@ public class OpenWeatherService implements WeatherService {
     double pressure = weatherResponse.getMain() != null ? weatherResponse.getMain().getPressure() : 0.0;
     double windSpeed = weatherResponse.getWind() != null ? weatherResponse.getWind().getSpeed() : 0.0;
 
+    // Normalize city name: first letter uppercase, rest lowercase
+    String normalizedCityName = normalizeCityName(cityName);
+
     return new WeatherData(
-        cityName,
+        normalizedCityName,
         temperature,
         description,
         humidity,

@@ -7,7 +7,6 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 import java.util.ArrayList;
 import java.util.List;
-import org.lotlinx.interview.model.ApiError;
 import org.lotlinx.interview.model.MultiCityWeatherResponse;
 import org.lotlinx.interview.model.WeatherData;
 import org.lotlinx.interview.service.WeatherService;
@@ -68,7 +67,7 @@ public class WeatherController {
 
     } catch (Exception e) {
       logger.error("Unexpected error in air pollution handler", e);
-      sendErrorResponse(context, 500, "Internal server error");
+      sendErrorResponse(context, 500, e.getMessage());
     }
   }
 
@@ -93,14 +92,13 @@ public class WeatherController {
                   sendSuccessResponse(context, ar.result());
                 } else {
                   logger.error("Error while processing multi-city weather request", ar.cause());
-                  sendErrorResponse(
-                      context, 500, "Internal server error: " + ar.cause().getMessage());
+                  sendErrorResponse(context, 500, ar.cause().getMessage());
                 }
               });
 
     } catch (Exception e) {
       logger.error("Unexpected error in multi-city weather handler", e);
-      sendErrorResponse(context, 400, "Invalid request format");
+      sendErrorResponse(context, 400, e.getMessage());
     }
   }
 
@@ -155,6 +153,15 @@ public class WeatherController {
     jsonResponse.put("successfulRequests", response.getSuccessfulRequests());
     jsonResponse.put("failedRequests", response.getFailedRequests());
     
+    // Add failed cities information
+    if (response.getFailedCities() != null && !response.getFailedCities().isEmpty()) {
+      JsonArray failedCitiesArray = new JsonArray();
+      for (String failedCity : response.getFailedCities()) {
+        failedCitiesArray.add(failedCity);
+      }
+      jsonResponse.put("failedCities", failedCitiesArray);
+    }
+    
     JsonArray weatherDataArray = new JsonArray();
     for (WeatherData weatherData : response.getWeatherData()) {
       JsonObject cityWeather = new JsonObject();
@@ -183,8 +190,11 @@ public class WeatherController {
     response.setStatusCode(statusCode);
     response.putHeader("content-type", "application/json");
 
-    ApiError error = new ApiError("API_ERROR", message);
-    response.end(Json.encodePrettily(error));
+    JsonObject errorJson = new JsonObject();
+    errorJson.put("error", "API_ERROR");
+    errorJson.put("message", message);
+    
+    response.end(errorJson.encodePrettily());
   }
 
   /** Extracts a double query parameter from the request. */
