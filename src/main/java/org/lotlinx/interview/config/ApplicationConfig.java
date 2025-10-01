@@ -21,10 +21,14 @@ public class ApplicationConfig {
   public static final int GLOBAL_SLEEP_TIME_MS = 500;
   public static final int HTTP_TIMEOUT_MS = 10000;
 
+  // API Versioning
+  public static final String API_VERSION = "v1";
+  public static final String API_BASE_PATH = "/api/" + API_VERSION;
+
   // API Endpoints
   public static final String HELLO_ENDPOINT = "/hello";
   public static final String AIR_POLLUTION_ENDPOINT = "/getCurrentAirPollution";
-  public static final String MULTI_CITY_WEATHER_ENDPOINT = "/getMultiCityWeather";
+  public static final String MULTI_CITY_WEATHER_ENDPOINT = API_BASE_PATH + "/weather/multi-city";
 
   // Content Types
   public static final String CONTENT_TYPE_JSON = "application/json";

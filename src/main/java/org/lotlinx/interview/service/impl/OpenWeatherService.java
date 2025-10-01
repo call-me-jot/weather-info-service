@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** Implementation of WeatherService that integrates with OpenWeatherMap API. */
-public class OpenWeatherService implements WeatherService {
+public class OpenWeatherService implements WeatherService, AutoCloseable {
 
   private static final Logger logger = LoggerFactory.getLogger(OpenWeatherService.class);
 
@@ -499,5 +499,17 @@ public class OpenWeatherService implements WeatherService {
         windSpeed,
         coordinates
     );
+  }
+
+  /**
+   * Closes the HttpClientUtil to free resources.
+   * This method should be called when the OpenWeatherService is no longer needed.
+   */
+  @Override
+  public void close() {
+    if (httpClient != null) {
+      httpClient.close();
+      logger.debug("OpenWeatherService closed successfully");
+    }
   }
 }
