@@ -7,6 +7,7 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 import java.util.ArrayList;
 import java.util.List;
+import org.lotlinx.interview.model.AirPollutionResponse;
 import org.lotlinx.interview.model.MultiCityWeatherResponse;
 import org.lotlinx.interview.model.WeatherData;
 import org.lotlinx.interview.service.WeatherService;
@@ -43,13 +44,6 @@ public class WeatherController {
     try {
       double latitude = getQueryParameterDouble("latitude", context);
       double longitude = getQueryParameterDouble("longitude", context);
-
-      // Validate coordinates
-      String validationError = validateAirPollutionRequest(latitude, longitude);
-      if (validationError != null) {
-        sendErrorResponse(context, 400, validationError);
-        return;
-      }
 
       weatherService
           .getCurrentAirPollution(latitude, longitude)
@@ -110,6 +104,10 @@ public class WeatherController {
     if (data instanceof MultiCityWeatherResponse) {
       MultiCityWeatherResponse weatherResponse = (MultiCityWeatherResponse) data;
       JsonObject jsonResponse = buildMultiCityWeatherJson(weatherResponse);
+      response.end(jsonResponse.encodePrettily());
+    } else if (data instanceof AirPollutionResponse) {
+      AirPollutionResponse airPollutionResponse = (AirPollutionResponse) data;
+      JsonObject jsonResponse = buildAirPollutionJson(airPollutionResponse);
       response.end(jsonResponse.encodePrettily());
     } else {
       response.end(Json.encodePrettily(data));
@@ -184,6 +182,58 @@ public class WeatherController {
     return jsonResponse;
   }
 
+  /** Builds JSON response for air pollution data. */
+  private JsonObject buildAirPollutionJson(AirPollutionResponse response) {
+    JsonObject jsonResponse = new JsonObject();
+    
+    // Add coordinates
+    if (response.getCoord() != null) {
+      JsonObject coord = new JsonObject();
+      coord.put("longitude", response.getCoord().getLongitude());
+      coord.put("latitude", response.getCoord().getLatitude());
+      jsonResponse.put("coord", coord);
+    }
+    
+    // Add air pollution data list
+    if (response.getList() != null && !response.getList().isEmpty()) {
+      JsonArray listArray = new JsonArray();
+      
+      for (AirPollutionResponse.AirPollutionData data : response.getList()) {
+        JsonObject dataJson = new JsonObject();
+        
+        // Add main data (AQI)
+        if (data.getMain() != null) {
+          JsonObject main = new JsonObject();
+          main.put("aqi", data.getMain().getAqi());
+          dataJson.put("main", main);
+        }
+        
+        // Add components
+        if (data.getComponents() != null) {
+          JsonObject components = new JsonObject();
+          components.put("co", data.getComponents().getCo());
+          components.put("no", data.getComponents().getNo());
+          components.put("no2", data.getComponents().getNo2());
+          components.put("o3", data.getComponents().getO3());
+          components.put("so2", data.getComponents().getSo2());
+          components.put("pm2_5", data.getComponents().getPm25());
+          components.put("pm10", data.getComponents().getPm10());
+          components.put("nh3", data.getComponents().getNh3());
+          dataJson.put("components", components);
+        }
+        
+        // Add timestamp
+        dataJson.put("dt", data.getTimestamp());
+        
+        listArray.add(dataJson);
+      }
+      
+      jsonResponse.put("list", listArray);
+    }
+    
+    return jsonResponse;
+  }
+
   /** Sends an error response. */
   private void sendErrorResponse(RoutingContext context, int statusCode, String message) {
     HttpServerResponse response = context.response();
@@ -211,30 +261,4 @@ public class WeatherController {
     return -1.0;
   }
 
-  /**
-   * Validates the air pollution request parameters.
-   *
-   * @param latitude the latitude coordinate
-   * @param longitude the longitude coordinate
-   * @return validation error message if invalid, null if valid
-   */
-  private String validateAirPollutionRequest(double latitude, double longitude) {
-    if (latitude == -1.0) {
-      return "Missing required parameter: latitude";
-    }
-
-    if (longitude == -1.0) {
-      return "Missing required parameter: longitude";
-    }
-
-    if (latitude < -90.0 || latitude > 90.0) {
-      return "Latitude must be between -90 and 90 degrees";
-    }
-
-    if (longitude < -180.0 || longitude > 180.0) {
-      return "Longitude must be between -180 and 180 degrees";
-    }
-
-    return null; // No validation errors
-  }
 }

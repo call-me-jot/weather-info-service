@@ -6,9 +6,11 @@ import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import org.lotlinx.interview.config.CircuitBreakerConfig;
 import org.lotlinx.interview.config.OpenWeatherConfig;
 import org.lotlinx.interview.model.*;
 import org.lotlinx.interview.service.WeatherService;
+import org.lotlinx.interview.util.CircuitBreaker;
 import org.lotlinx.interview.util.HttpClientUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,49 +27,101 @@ public class OpenWeatherService implements WeatherService {
   private final Vertx vertx;
   private final OpenWeatherConfig config;
   private final HttpClientUtil httpClient;
+  private final CircuitBreaker geocodingCircuitBreaker;
+  private final CircuitBreaker weatherCircuitBreaker;
+  private final CircuitBreaker airPollutionCircuitBreaker;
 
   public OpenWeatherService(Vertx vertx) {
     this.vertx = vertx;
     this.config = new OpenWeatherConfig();
     this.httpClient = new HttpClientUtil(vertx);
+    this.geocodingCircuitBreaker = new CircuitBreaker(
+        CircuitBreakerConfig.GEOCODING_CIRCUIT_BREAKER_NAME,
+        CircuitBreakerConfig.FAILURE_THRESHOLD,
+        CircuitBreakerConfig.API_TIMEOUT_MS,
+        CircuitBreakerConfig.RETRY_TIMEOUT_MS,
+        vertx
+    );
+    this.weatherCircuitBreaker = new CircuitBreaker(
+        CircuitBreakerConfig.WEATHER_CIRCUIT_BREAKER_NAME,
+        CircuitBreakerConfig.FAILURE_THRESHOLD,
+        CircuitBreakerConfig.API_TIMEOUT_MS,
+        CircuitBreakerConfig.RETRY_TIMEOUT_MS,
+        vertx
+    );
+    this.airPollutionCircuitBreaker = new CircuitBreaker(
+        CircuitBreakerConfig.AIR_POLLUTION_CIRCUIT_BREAKER_NAME,
+        CircuitBreakerConfig.FAILURE_THRESHOLD,
+        CircuitBreakerConfig.API_TIMEOUT_MS,
+        CircuitBreakerConfig.RETRY_TIMEOUT_MS,
+        vertx
+    );
+  }
+
+  public OpenWeatherService(Vertx vertx, OpenWeatherConfig config) {
+    this.vertx = vertx;
+    this.config = config;
+    this.httpClient = new HttpClientUtil(vertx);
+    this.geocodingCircuitBreaker = new CircuitBreaker(
+        CircuitBreakerConfig.GEOCODING_CIRCUIT_BREAKER_NAME,
+        CircuitBreakerConfig.FAILURE_THRESHOLD,
+        CircuitBreakerConfig.API_TIMEOUT_MS,
+        CircuitBreakerConfig.RETRY_TIMEOUT_MS,
+        vertx
+    );
+    this.weatherCircuitBreaker = new CircuitBreaker(
+        CircuitBreakerConfig.WEATHER_CIRCUIT_BREAKER_NAME,
+        CircuitBreakerConfig.FAILURE_THRESHOLD,
+        CircuitBreakerConfig.API_TIMEOUT_MS,
+        CircuitBreakerConfig.RETRY_TIMEOUT_MS,
+        vertx
+    );
+    this.airPollutionCircuitBreaker = new CircuitBreaker(
+        CircuitBreakerConfig.AIR_POLLUTION_CIRCUIT_BREAKER_NAME,
+        CircuitBreakerConfig.FAILURE_THRESHOLD,
+        CircuitBreakerConfig.API_TIMEOUT_MS,
+        CircuitBreakerConfig.RETRY_TIMEOUT_MS,
+        vertx
+    );
   }
 
     @Override
   public Future<AirPollutionResponse> getCurrentAirPollution(double latitude, double longitude) {
-    Promise<AirPollutionResponse> promise = Promise.promise();
-
     logger.debug(
         "Fetching air pollution data for coordinates: lat={}, lon={}", latitude, longitude);
 
-    // Build query parameters
-    MultiMap queryParams = MultiMap.caseInsensitiveMultiMap();
-    queryParams.add("lat", String.valueOf(latitude));
-    queryParams.add("lon", String.valueOf(longitude));
-    queryParams.add("appId", config.getApiKey());
+    return airPollutionCircuitBreaker.execute(() -> {
+      Promise<AirPollutionResponse> promise = Promise.promise();
 
-    // Make HTTP request
-    httpClient
-        .sendGetRequest(config.getHost(), config.getPath(), queryParams, config.getPort())
-        .onComplete(
-            ar -> {
-              if (ar.succeeded()) {
-                try {
-                  JsonObject response = ar.result();
-                  AirPollutionResponse airPollutionResponse =
-                      response.mapTo(AirPollutionResponse.class);
-                  logger.info("Successfully retrieved air pollution data");
-                  promise.complete(airPollutionResponse);
-                } catch (Exception e) {
-                  logger.error("Failed to parse air pollution response", e);
-                  promise.fail(new RuntimeException("Failed to parse air pollution data", e));
+      // Build query parameters
+      MultiMap queryParams = MultiMap.caseInsensitiveMultiMap();
+      queryParams.add("lat", String.valueOf(latitude));
+      queryParams.add("lon", String.valueOf(longitude));
+      queryParams.add("appId", config.getApiKey());
+
+      // Make HTTP request
+      httpClient
+          .sendGetRequest(config.getHost(), config.getPath(), queryParams, config.getPort())
+          .onComplete(
+              ar -> {
+                if (ar.succeeded()) {
+                  try {
+                    JsonObject response = ar.result();
+                    AirPollutionResponse airPollutionResponse = parseAirPollutionResponse(response);
+                    logger.info("Successfully retrieved air pollution data");
+                    promise.complete(airPollutionResponse);
+                  } catch (Exception e) {
+                    logger.error("Failed to parse air pollution response", e);
+                    promise.fail(new RuntimeException("Failed to parse air pollution data: " + e.getMessage(), e));
+                  }
+                } else {
+                  logger.error("Failed to fetch air pollution data", ar.cause());
+                  promise.fail(ar.cause());
                 }
-              } else {
-                logger.error("Failed to fetch air pollution data", ar.cause());
-                promise.fail(ar.cause());
-              }
-            });
+              });
 
-    return promise.future();
+      return promise.future();
+    });
   }
 
   @Override
@@ -156,64 +210,68 @@ public class OpenWeatherService implements WeatherService {
    * Gets coordinates for a city using the Geocoding API.
    */
   private Future<GeocodingResponse[]> getCityCoordinates(String cityName) {
-    Promise<GeocodingResponse[]> promise = Promise.promise();
+    return geocodingCircuitBreaker.execute(() -> {
+      Promise<GeocodingResponse[]> promise = Promise.promise();
 
-    MultiMap queryParams = buildGeocodingQueryParams(cityName);
-    OpenWeatherConfig config = OpenWeatherConfig.forGeocoding();
+      MultiMap queryParams = buildGeocodingQueryParams(cityName);
+      OpenWeatherConfig config = OpenWeatherConfig.forGeocoding();
 
-    httpClient
-        .sendGetRequestRaw(config.getHost(), config.getPath(), queryParams, config.getPort())
-        .onComplete(ar -> {
-          if (ar.succeeded()) {
-            try {
-              GeocodingResponse[] responses = parseGeocodingResponse(ar.result());
-              promise.complete(responses);
-            } catch (Exception e) {
-              logger.error("Failed to parse geocoding response for city: {}", cityName, e);
-              promise.fail(new RuntimeException("Failed to parse geocoding data for city '" + cityName + "': " + e.getMessage(), e));
+      httpClient
+          .sendGetRequestRaw(config.getHost(), config.getPath(), queryParams, config.getPort())
+          .onComplete(ar -> {
+            if (ar.succeeded()) {
+              try {
+                GeocodingResponse[] responses = parseGeocodingResponse(ar.result());
+                promise.complete(responses);
+              } catch (Exception e) {
+                logger.error("Failed to parse geocoding response for city: {}", cityName, e);
+                promise.fail(new RuntimeException("Failed to parse geocoding data for city '" + cityName + "': " + e.getMessage(), e));
+              }
+            } else {
+              logger.error("Failed to fetch coordinates for city: {}", cityName, ar.cause());
+              String errorMessage = "Unable to retrieve coordinates for city '" + cityName + "': " + ar.cause().getMessage();
+              promise.fail(new RuntimeException(errorMessage, ar.cause()));
             }
-          } else {
-            logger.error("Failed to fetch coordinates for city: {}", cityName, ar.cause());
-            String errorMessage = "Unable to retrieve coordinates for city '" + cityName + "': " + ar.cause().getMessage();
-            promise.fail(new RuntimeException(errorMessage, ar.cause()));
-          }
-        });
+          });
 
-    return promise.future();
+      return promise.future();
+    });
   }
 
   /**
    * Gets current weather data for given coordinates.
    */
   private Future<CurrentWeatherResponse> getCurrentWeather(Coordinates coordinates) {
-    Promise<CurrentWeatherResponse> promise = Promise.promise();
+    return weatherCircuitBreaker.execute(() -> {
+      Promise<CurrentWeatherResponse> promise = Promise.promise();
 
-    MultiMap queryParams = buildWeatherQueryParams(coordinates);
-    OpenWeatherConfig config = OpenWeatherConfig.forCurrentWeather();
+      MultiMap queryParams = buildWeatherQueryParams(coordinates);
+      OpenWeatherConfig config = OpenWeatherConfig.forCurrentWeather();
 
-    httpClient
-        .sendGetRequest(config.getHost(), config.getPath(), queryParams, config.getPort())
-        .onComplete(ar -> {
-          if (ar.succeeded()) {
-            try {
-              CurrentWeatherResponse response = parseWeatherResponse(ar.result());
-              promise.complete(response);
-            } catch (Exception e) {
-              logger.error("Failed to parse current weather response for coordinates: {}, {}", 
-                  coordinates.getLatitude(), coordinates.getLongitude(), e);
-              promise.fail(new RuntimeException("Failed to parse weather data for coordinates (" + 
-                  coordinates.getLatitude() + ", " + coordinates.getLongitude() + "): " + e.getMessage(), e));
+      httpClient
+          .sendGetRequest(config.getHost(), config.getPath(), queryParams, config.getPort())
+          .onComplete(ar -> {
+            if (ar.succeeded()) {
+              try {
+                CurrentWeatherResponse response = parseWeatherResponse(ar.result());
+                promise.complete(response);
+              } catch (Exception e) {
+                logger.error("Failed to parse current weather response for coordinates: {}, {}", 
+                    coordinates.getLatitude(), coordinates.getLongitude(), e);
+                promise.fail(new RuntimeException("Failed to parse weather data for coordinates (" + 
+                    coordinates.getLatitude() + ", " + coordinates.getLongitude() + "): " + e.getMessage(), e));
+              }
+            } else {
+              logger.error("Failed to fetch current weather data for coordinates: {}, {}", 
+                  coordinates.getLatitude(), coordinates.getLongitude(), ar.cause());
+              String errorMessage = "Unable to retrieve weather data for coordinates (" + 
+                  coordinates.getLatitude() + ", " + coordinates.getLongitude() + "): " + ar.cause().getMessage();
+              promise.fail(new RuntimeException(errorMessage, ar.cause()));
             }
-          } else {
-            logger.error("Failed to fetch current weather data for coordinates: {}, {}", 
-                coordinates.getLatitude(), coordinates.getLongitude(), ar.cause());
-            String errorMessage = "Unable to retrieve weather data for coordinates (" + 
-                coordinates.getLatitude() + ", " + coordinates.getLongitude() + "): " + ar.cause().getMessage();
-            promise.fail(new RuntimeException(errorMessage, ar.cause()));
-          }
-        });
+          });
 
-    return promise.future();
+      return promise.future();
+    });
   }
 
   /**
@@ -304,6 +362,65 @@ public class OpenWeatherService implements WeatherService {
     }
     
     return weatherResponse;
+  }
+
+  /**
+   * Parses air pollution API response.
+   */
+  private AirPollutionResponse parseAirPollutionResponse(JsonObject response) {
+    AirPollutionResponse airPollutionResponse = new AirPollutionResponse();
+    
+    // Parse coordinates
+    JsonObject coord = response.getJsonObject("coord");
+    if (coord != null) {
+      AirPollutionResponse.Coordinates coordinates = new AirPollutionResponse.Coordinates();
+      coordinates.setLongitude(coord.getDouble("lon"));
+      coordinates.setLatitude(coord.getDouble("lat"));
+      airPollutionResponse.setCoord(coordinates);
+    }
+    
+    // Parse air pollution data list
+    JsonArray listArray = response.getJsonArray("list");
+    if (listArray != null) {
+      List<AirPollutionResponse.AirPollutionData> pollutionDataList = new ArrayList<>();
+      
+      for (int i = 0; i < listArray.size(); i++) {
+        JsonObject dataJson = listArray.getJsonObject(i);
+        AirPollutionResponse.AirPollutionData pollutionData = new AirPollutionResponse.AirPollutionData();
+        
+        // Parse main data (AQI)
+        JsonObject main = dataJson.getJsonObject("main");
+        if (main != null) {
+          AirPollutionResponse.Main mainData = new AirPollutionResponse.Main();
+          mainData.setAqi(main.getInteger("aqi"));
+          pollutionData.setMain(mainData);
+        }
+        
+        // Parse components
+        JsonObject components = dataJson.getJsonObject("components");
+        if (components != null) {
+          AirPollutionResponse.Components componentsData = new AirPollutionResponse.Components();
+          componentsData.setCo(components.getDouble("co"));
+          componentsData.setNo(components.getDouble("no"));
+          componentsData.setNo2(components.getDouble("no2"));
+          componentsData.setO3(components.getDouble("o3"));
+          componentsData.setSo2(components.getDouble("so2"));
+          componentsData.setPm25(components.getDouble("pm2_5"));
+          componentsData.setPm10(components.getDouble("pm10"));
+          componentsData.setNh3(components.getDouble("nh3"));
+          pollutionData.setComponents(componentsData);
+        }
+        
+        // Parse timestamp
+        pollutionData.setTimestamp(dataJson.getLong("dt"));
+        
+        pollutionDataList.add(pollutionData);
+      }
+      
+      airPollutionResponse.setList(pollutionDataList);
+    }
+    
+    return airPollutionResponse;
   }
 
   /**
