@@ -8,10 +8,12 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.lotlinx.interview.config.CircuitBreakerConfig;
 import org.lotlinx.interview.config.OpenWeatherConfig;
+import org.lotlinx.interview.config.RateLimiterConfig;
 import org.lotlinx.interview.model.*;
 import org.lotlinx.interview.service.WeatherService;
-import org.lotlinx.interview.util.CircuitBreaker;
+import org.lotlinx.interview.util.impl.CircuitBreaker;
 import org.lotlinx.interview.util.HttpClientUtil;
+import org.lotlinx.interview.util.impl.RateLimiter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +32,9 @@ public class OpenWeatherService implements WeatherService {
   private final CircuitBreaker geocodingCircuitBreaker;
   private final CircuitBreaker weatherCircuitBreaker;
   private final CircuitBreaker airPollutionCircuitBreaker;
+  private final RateLimiter geocodingRateLimiter;
+  private final RateLimiter weatherRateLimiter;
+  private final RateLimiter airPollutionRateLimiter;
 
   public OpenWeatherService(Vertx vertx) {
     this.vertx = vertx;
@@ -54,6 +59,21 @@ public class OpenWeatherService implements WeatherService {
         CircuitBreakerConfig.FAILURE_THRESHOLD,
         CircuitBreakerConfig.API_TIMEOUT_MS,
         CircuitBreakerConfig.RETRY_TIMEOUT_MS,
+        vertx
+    );
+    this.geocodingRateLimiter = new RateLimiter(
+        RateLimiterConfig.GEOCODING_RATE_LIMITER_NAME,
+        RateLimiterConfig.FREE_TIER_DAILY_LIMIT,
+        vertx
+    );
+    this.weatherRateLimiter = new RateLimiter(
+        RateLimiterConfig.WEATHER_RATE_LIMITER_NAME,
+        RateLimiterConfig.FREE_TIER_DAILY_LIMIT,
+        vertx
+    );
+    this.airPollutionRateLimiter = new RateLimiter(
+        RateLimiterConfig.AIR_POLLUTION_RATE_LIMITER_NAME,
+        RateLimiterConfig.FREE_TIER_DAILY_LIMIT,
         vertx
     );
   }
@@ -83,6 +103,21 @@ public class OpenWeatherService implements WeatherService {
         CircuitBreakerConfig.RETRY_TIMEOUT_MS,
         vertx
     );
+    this.geocodingRateLimiter = new RateLimiter(
+        RateLimiterConfig.GEOCODING_RATE_LIMITER_NAME,
+        RateLimiterConfig.FREE_TIER_DAILY_LIMIT,
+        vertx
+    );
+    this.weatherRateLimiter = new RateLimiter(
+        RateLimiterConfig.WEATHER_RATE_LIMITER_NAME,
+        RateLimiterConfig.FREE_TIER_DAILY_LIMIT,
+        vertx
+    );
+    this.airPollutionRateLimiter = new RateLimiter(
+        RateLimiterConfig.AIR_POLLUTION_RATE_LIMITER_NAME,
+        RateLimiterConfig.FREE_TIER_DAILY_LIMIT,
+        vertx
+    );
   }
 
     @Override
@@ -90,7 +125,8 @@ public class OpenWeatherService implements WeatherService {
     logger.debug(
         "Fetching air pollution data for coordinates: lat={}, lon={}", latitude, longitude);
 
-    return airPollutionCircuitBreaker.execute(() -> {
+    return airPollutionRateLimiter.executeWithRateLimit(() -> 
+      airPollutionCircuitBreaker.execute(() -> {
       Promise<AirPollutionResponse> promise = Promise.promise();
 
       // Build query parameters
@@ -121,7 +157,7 @@ public class OpenWeatherService implements WeatherService {
               });
 
       return promise.future();
-    });
+    }));
   }
 
   @Override
@@ -210,7 +246,8 @@ public class OpenWeatherService implements WeatherService {
    * Gets coordinates for a city using the Geocoding API.
    */
   private Future<GeocodingResponse[]> getCityCoordinates(String cityName) {
-    return geocodingCircuitBreaker.execute(() -> {
+    return geocodingRateLimiter.executeWithRateLimit(() -> 
+      geocodingCircuitBreaker.execute(() -> {
       Promise<GeocodingResponse[]> promise = Promise.promise();
 
       MultiMap queryParams = buildGeocodingQueryParams(cityName);
@@ -235,14 +272,15 @@ public class OpenWeatherService implements WeatherService {
           });
 
       return promise.future();
-    });
+    }));
   }
 
   /**
    * Gets current weather data for given coordinates.
    */
   private Future<CurrentWeatherResponse> getCurrentWeather(Coordinates coordinates) {
-    return weatherCircuitBreaker.execute(() -> {
+    return weatherRateLimiter.executeWithRateLimit(() -> 
+      weatherCircuitBreaker.execute(() -> {
       Promise<CurrentWeatherResponse> promise = Promise.promise();
 
       MultiMap queryParams = buildWeatherQueryParams(coordinates);
@@ -271,7 +309,7 @@ public class OpenWeatherService implements WeatherService {
           });
 
       return promise.future();
-    });
+    }));
   }
 
   /**
@@ -434,20 +472,6 @@ public class OpenWeatherService implements WeatherService {
     
     String trimmed = cityName.trim();
     return trimmed.substring(0, 1).toUpperCase() + trimmed.substring(1).toLowerCase();
-  }
-
-  /**
-   * Handles special city name cases (optional advanced normalization).
-   */
-  private String handleSpecialCityNames(String cityName) {
-    String normalized = cityName.substring(0, 1).toUpperCase() + cityName.substring(1).toLowerCase();
-    
-    // Handle common city name patterns
-    normalized = normalized.replaceAll("\\bSt\\b", "St.");  // St John -> St. John
-    normalized = normalized.replaceAll("\\bMt\\b", "Mt.");  // Mt Washington -> Mt. Washington
-    normalized = normalized.replaceAll("\\bFt\\b", "Ft.");  // Ft Worth -> Ft. Worth
-    
-    return normalized;
   }
 
   /**
