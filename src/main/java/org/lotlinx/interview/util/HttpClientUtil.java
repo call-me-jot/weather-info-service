@@ -12,7 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Utility class for making HTTP requests. */
-public class HttpClientUtil {
+public class HttpClientUtil implements AutoCloseable {
 
   private static final Logger logger = LoggerFactory.getLogger(HttpClientUtil.class);
 
@@ -134,4 +134,15 @@ public class HttpClientUtil {
     return promise.future();
   }
 
+  /**
+   * Closes the WebClient to free resources.
+   * This method should be called when the HttpClientUtil is no longer needed.
+   */
+  @Override
+  public void close() {
+    if (webClient != null) {
+      webClient.close();
+      logger.debug("WebClient closed successfully");
+    }
+  }
 }

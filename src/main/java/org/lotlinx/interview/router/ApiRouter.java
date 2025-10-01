@@ -11,16 +11,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Router configuration for API endpoints. */
-public class ApiRouter {
+public class ApiRouter implements AutoCloseable {
 
   private static final Logger logger = LoggerFactory.getLogger(ApiRouter.class);
 
   private final Vertx vertx;
   private final WeatherController weatherController;
+  private final WeatherService weatherService;
 
   public ApiRouter(Vertx vertx) {
     this.vertx = vertx;
-    WeatherService weatherService = new OpenWeatherService(vertx);
+    this.weatherService = new OpenWeatherService(vertx);
     this.weatherController = new WeatherController(weatherService);
   }
 
@@ -91,5 +92,21 @@ public class ApiRouter {
               .end(
                   "{\"error\":\"Internal Server Error\",\"message\":\"An unexpected error occurred\"}");
         });
+  }
+
+  /**
+   * Closes the WeatherService to free resources.
+   * This method should be called when the ApiRouter is no longer needed.
+   */
+  @Override
+  public void close() {
+    if (weatherService instanceof AutoCloseable) {
+      try {
+        ((AutoCloseable) weatherService).close();
+        logger.debug("ApiRouter closed successfully");
+      } catch (Exception e) {
+        logger.warn("Error closing WeatherService", e);
+      }
+    }
   }
 }

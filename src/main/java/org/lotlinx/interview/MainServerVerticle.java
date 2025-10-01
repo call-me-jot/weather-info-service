@@ -3,6 +3,7 @@ package org.lotlinx.interview;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpServer;
 import io.vertx.ext.web.Router;
 import org.lotlinx.interview.config.ApplicationConfig;
 import org.lotlinx.interview.router.ApiRouter;
@@ -13,6 +14,8 @@ import org.slf4j.LoggerFactory;
 public class MainServerVerticle extends AbstractVerticle {
 
   private static final Logger logger = LoggerFactory.getLogger(MainServerVerticle.class);
+  private HttpServer httpServer;
+  private ApiRouter apiRouter;
 
   @Override
   public void start(Promise<Void> startPromise) {
@@ -20,14 +23,15 @@ public class MainServerVerticle extends AbstractVerticle {
 
     try {
       // Create API router
-      ApiRouter apiRouter = new ApiRouter(vertx);
+      apiRouter = new ApiRouter(vertx);
       Router router = apiRouter.createRouter();
 
       // Create and start HTTP server
-      vertx
+      httpServer = vertx
           .createHttpServer()
-          .requestHandler(router)
-          .listen(ApplicationConfig.SERVER_PORT, ApplicationConfig.SERVER_HOST)
+          .requestHandler(router);
+      
+      httpServer.listen(ApplicationConfig.SERVER_PORT, ApplicationConfig.SERVER_HOST)
           .onSuccess(
               server -> {
                 logger.info(
@@ -51,7 +55,23 @@ public class MainServerVerticle extends AbstractVerticle {
   @Override
   public void stop(Promise<Void> stopPromise) {
     logger.info("Stopping MainServerVerticle...");
-    stopPromise.complete();
+    
+    if (httpServer != null) {
+      httpServer.close()
+          .onSuccess(v -> {
+            logger.info("HTTP server closed successfully");
+            if (apiRouter != null) {
+              apiRouter.close();
+            }
+            stopPromise.complete();
+          })
+          .onFailure(throwable -> {
+            logger.error("Error closing HTTP server", throwable);
+            stopPromise.fail(throwable);
+          });
+    } else {
+      stopPromise.complete();
+    }
   }
 
   public static void main(String[] args) {
