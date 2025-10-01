@@ -6,6 +6,7 @@ import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import org.lotlinx.interview.config.ApplicationConfig;
 import org.lotlinx.interview.config.CircuitBreakerConfig;
 import org.lotlinx.interview.config.OpenWeatherConfig;
 import org.lotlinx.interview.config.RateLimiterConfig;
@@ -13,6 +14,7 @@ import org.lotlinx.interview.model.*;
 import org.lotlinx.interview.service.WeatherService;
 import org.lotlinx.interview.util.impl.CircuitBreaker;
 import org.lotlinx.interview.util.HttpClientUtil;
+import org.lotlinx.interview.util.impl.InMemoryCache;
 import org.lotlinx.interview.util.impl.RateLimiter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +37,9 @@ public class OpenWeatherService implements WeatherService, AutoCloseable {
   private final RateLimiter geocodingRateLimiter;
   private final RateLimiter weatherRateLimiter;
   private final RateLimiter airPollutionRateLimiter;
+  private final InMemoryCache<AirPollutionResponse> airPollutionCache;
+  private final InMemoryCache<CurrentWeatherResponse> weatherCache;
+  private final InMemoryCache<GeocodingResponse[]> geocodingCache;
 
   public OpenWeatherService(Vertx vertx) {
     this.vertx = vertx;
@@ -76,56 +81,38 @@ public class OpenWeatherService implements WeatherService, AutoCloseable {
         RateLimiterConfig.FREE_TIER_DAILY_LIMIT,
         vertx
     );
-  }
-
-  public OpenWeatherService(Vertx vertx, OpenWeatherConfig config) {
-    this.vertx = vertx;
-    this.config = config;
-    this.httpClient = new HttpClientUtil(vertx);
-    this.geocodingCircuitBreaker = new CircuitBreaker(
-        CircuitBreakerConfig.GEOCODING_CIRCUIT_BREAKER_NAME,
-        CircuitBreakerConfig.FAILURE_THRESHOLD,
-        CircuitBreakerConfig.API_TIMEOUT_MS,
-        CircuitBreakerConfig.RETRY_TIMEOUT_MS,
+    this.airPollutionCache = new InMemoryCache<>(
+        "air_pollution", 
+        ApplicationConfig.AIR_POLLUTION_CACHE_TTL_MS, 
         vertx
     );
-    this.weatherCircuitBreaker = new CircuitBreaker(
-        CircuitBreakerConfig.WEATHER_CIRCUIT_BREAKER_NAME,
-        CircuitBreakerConfig.FAILURE_THRESHOLD,
-        CircuitBreakerConfig.API_TIMEOUT_MS,
-        CircuitBreakerConfig.RETRY_TIMEOUT_MS,
+    this.weatherCache = new InMemoryCache<>(
+        "weather", 
+        ApplicationConfig.WEATHER_CACHE_TTL_MS, 
         vertx
     );
-    this.airPollutionCircuitBreaker = new CircuitBreaker(
-        CircuitBreakerConfig.AIR_POLLUTION_CIRCUIT_BREAKER_NAME,
-        CircuitBreakerConfig.FAILURE_THRESHOLD,
-        CircuitBreakerConfig.API_TIMEOUT_MS,
-        CircuitBreakerConfig.RETRY_TIMEOUT_MS,
-        vertx
-    );
-    this.geocodingRateLimiter = new RateLimiter(
-        RateLimiterConfig.GEOCODING_RATE_LIMITER_NAME,
-        RateLimiterConfig.FREE_TIER_DAILY_LIMIT,
-        vertx
-    );
-    this.weatherRateLimiter = new RateLimiter(
-        RateLimiterConfig.WEATHER_RATE_LIMITER_NAME,
-        RateLimiterConfig.FREE_TIER_DAILY_LIMIT,
-        vertx
-    );
-    this.airPollutionRateLimiter = new RateLimiter(
-        RateLimiterConfig.AIR_POLLUTION_RATE_LIMITER_NAME,
-        RateLimiterConfig.FREE_TIER_DAILY_LIMIT,
+    this.geocodingCache = new InMemoryCache<>(
+        "geocoding", 
+        ApplicationConfig.GEOCODING_CACHE_TTL_MS, 
         vertx
     );
   }
 
-    @Override
+  @Override
   public Future<AirPollutionResponse> getCurrentAirPollution(double latitude, double longitude) {
     logger.debug(
         "Fetching air pollution data for coordinates: lat={}, lon={}", latitude, longitude);
 
-    return airPollutionRateLimiter.executeWithRateLimit(() -> 
+    // Check cache first
+    String cacheKey = String.format("air_pollution:%.6f:%.6f", latitude, longitude);
+    AirPollutionResponse cachedResponse = airPollutionCache.get(cacheKey);
+    if (cachedResponse != null) {
+      logger.debug("Cache hit for air pollution data: {}", cacheKey);
+      return Future.succeededFuture(cachedResponse);
+    }
+
+    logger.debug("Cache miss for air pollution data: {}", cacheKey);
+    return airPollutionRateLimiter.executeWithRateLimit(() ->
       airPollutionCircuitBreaker.execute(() -> {
       Promise<AirPollutionResponse> promise = Promise.promise();
 
@@ -140,17 +127,22 @@ public class OpenWeatherService implements WeatherService, AutoCloseable {
           .sendGetRequest(config.getHost(), config.getPath(), queryParams, config.getPort())
           .onComplete(
               ar -> {
-                if (ar.succeeded()) {
-                  try {
-                    JsonObject response = ar.result();
-                    AirPollutionResponse airPollutionResponse = parseAirPollutionResponse(response);
-                    logger.info("Successfully retrieved air pollution data");
-                    promise.complete(airPollutionResponse);
-                  } catch (Exception e) {
-                    logger.error("Failed to parse air pollution response", e);
-                    promise.fail(new RuntimeException("Failed to parse air pollution data: " + e.getMessage(), e));
-                  }
-                } else {
+                     if (ar.succeeded()) {
+                       try {
+                         JsonObject response = ar.result();
+                         AirPollutionResponse airPollutionResponse = parseAirPollutionResponse(response);
+                         
+                         // Cache the response
+                         airPollutionCache.put(cacheKey, airPollutionResponse);
+                         logger.debug("Cached air pollution data: {}", cacheKey);
+                         
+                         logger.info("Successfully retrieved air pollution data");
+                         promise.complete(airPollutionResponse);
+                       } catch (Exception e) {
+                         logger.error("Failed to parse air pollution response", e);
+                         promise.fail(new RuntimeException("Failed to parse air pollution data: " + e.getMessage(), e));
+                       }
+                     } else {
                   logger.error("Failed to fetch air pollution data", ar.cause());
                   promise.fail(ar.cause());
                 }
@@ -246,7 +238,16 @@ public class OpenWeatherService implements WeatherService, AutoCloseable {
    * Gets coordinates for a city using the Geocoding API.
    */
   private Future<GeocodingResponse[]> getCityCoordinates(String cityName) {
-    return geocodingRateLimiter.executeWithRateLimit(() -> 
+    // Check cache first
+    String cacheKey = "geocoding:" + cityName.toLowerCase().trim();
+    GeocodingResponse[] cachedResponse = geocodingCache.get(cacheKey);
+    if (cachedResponse != null) {
+      logger.debug("Cache hit for geocoding data: {}", cacheKey);
+      return Future.succeededFuture(cachedResponse);
+    }
+
+    logger.debug("Cache miss for geocoding data: {}", cacheKey);
+    return geocodingRateLimiter.executeWithRateLimit(() ->
       geocodingCircuitBreaker.execute(() -> {
       Promise<GeocodingResponse[]> promise = Promise.promise();
 
@@ -256,15 +257,20 @@ public class OpenWeatherService implements WeatherService, AutoCloseable {
       httpClient
           .sendGetRequestRaw(config.getHost(), config.getPath(), queryParams, config.getPort())
           .onComplete(ar -> {
-            if (ar.succeeded()) {
-              try {
-                GeocodingResponse[] responses = parseGeocodingResponse(ar.result());
-                promise.complete(responses);
-              } catch (Exception e) {
-                logger.error("Failed to parse geocoding response for city: {}", cityName, e);
-                promise.fail(new RuntimeException("Failed to parse geocoding data for city '" + cityName + "': " + e.getMessage(), e));
-              }
-            } else {
+                 if (ar.succeeded()) {
+                   try {
+                     GeocodingResponse[] responses = parseGeocodingResponse(ar.result());
+                     
+                     // Cache the response
+                     geocodingCache.put(cacheKey, responses);
+                     logger.debug("Cached geocoding data: {}", cacheKey);
+                     
+                     promise.complete(responses);
+                   } catch (Exception e) {
+                     logger.error("Failed to parse geocoding response for city: {}", cityName, e);
+                     promise.fail(new RuntimeException("Failed to parse geocoding data for city '" + cityName + "': " + e.getMessage(), e));
+                   }
+                 } else {
               logger.error("Failed to fetch coordinates for city: {}", cityName, ar.cause());
               String errorMessage = "Unable to retrieve coordinates for city '" + cityName + "': " + ar.cause().getMessage();
               promise.fail(new RuntimeException(errorMessage, ar.cause()));
@@ -279,7 +285,16 @@ public class OpenWeatherService implements WeatherService, AutoCloseable {
    * Gets current weather data for given coordinates.
    */
   private Future<CurrentWeatherResponse> getCurrentWeather(Coordinates coordinates) {
-    return weatherRateLimiter.executeWithRateLimit(() -> 
+    // Check cache first
+    String cacheKey = String.format("weather:%.6f:%.6f", coordinates.getLatitude(), coordinates.getLongitude());
+    CurrentWeatherResponse cachedResponse = weatherCache.get(cacheKey);
+    if (cachedResponse != null) {
+      logger.debug("Cache hit for weather data: {}", cacheKey);
+      return Future.succeededFuture(cachedResponse);
+    }
+
+    logger.debug("Cache miss for weather data: {}", cacheKey);
+    return weatherRateLimiter.executeWithRateLimit(() ->
       weatherCircuitBreaker.execute(() -> {
       Promise<CurrentWeatherResponse> promise = Promise.promise();
 
@@ -289,17 +304,22 @@ public class OpenWeatherService implements WeatherService, AutoCloseable {
       httpClient
           .sendGetRequest(config.getHost(), config.getPath(), queryParams, config.getPort())
           .onComplete(ar -> {
-            if (ar.succeeded()) {
-              try {
-                CurrentWeatherResponse response = parseWeatherResponse(ar.result());
-                promise.complete(response);
-              } catch (Exception e) {
-                logger.error("Failed to parse current weather response for coordinates: {}, {}", 
-                    coordinates.getLatitude(), coordinates.getLongitude(), e);
-                promise.fail(new RuntimeException("Failed to parse weather data for coordinates (" + 
-                    coordinates.getLatitude() + ", " + coordinates.getLongitude() + "): " + e.getMessage(), e));
-              }
-            } else {
+                 if (ar.succeeded()) {
+                   try {
+                     CurrentWeatherResponse response = parseWeatherResponse(ar.result());
+                     
+                     // Cache the response
+                     weatherCache.put(cacheKey, response);
+                     logger.debug("Cached weather data: {}", cacheKey);
+                     
+                     promise.complete(response);
+                   } catch (Exception e) {
+                     logger.error("Failed to parse current weather response for coordinates: {}, {}",
+                         coordinates.getLatitude(), coordinates.getLongitude(), e);
+                     promise.fail(new RuntimeException("Failed to parse weather data for coordinates (" +
+                         coordinates.getLatitude() + ", " + coordinates.getLongitude() + "): " + e.getMessage(), e));
+                   }
+                 } else {
               logger.error("Failed to fetch current weather data for coordinates: {}, {}", 
                   coordinates.getLatitude(), coordinates.getLongitude(), ar.cause());
               String errorMessage = "Unable to retrieve weather data for coordinates (" + 
@@ -500,7 +520,6 @@ public class OpenWeatherService implements WeatherService, AutoCloseable {
         coordinates
     );
   }
-
   /**
    * Closes the HttpClientUtil to free resources.
    * This method should be called when the OpenWeatherService is no longer needed.
