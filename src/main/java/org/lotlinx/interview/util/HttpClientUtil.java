@@ -79,7 +79,7 @@ public class HttpClientUtil {
               promise.complete(jsonResponse);
             } catch (Exception e) {
               logger.error("Failed to parse response as JSON", e);
-              promise.fail(new RuntimeException("Failed to parse response", e));
+              promise.fail(new RuntimeException("Failed to parse JSON response: " + e.getMessage(), e));
             }
           } else {
             logger.error("HTTP request failed", ar.cause());
@@ -123,7 +123,7 @@ public class HttpClientUtil {
               promise.complete(responseBody);
             } catch (Exception e) {
               logger.error("Failed to get response body", e);
-              promise.fail(new RuntimeException("Failed to get response body", e));
+              promise.fail(new RuntimeException("Failed to get response body: " + e.getMessage(), e));
             }
           } else {
             logger.error("HTTP request failed", ar.cause());
