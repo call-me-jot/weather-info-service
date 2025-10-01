@@ -91,45 +91,42 @@ public class HttpClientUtil {
   }
 
   /**
-   * Sends a POST request with JSON body.
+   * Sends a GET request and returns the raw response body as string.
    *
    * @param host the target host
    * @param path the request path
-   * @param body the request body as JsonObject
+   * @param queryParams query parameters
    * @param port the target port
-   * @param headers optional headers
-   * @return Future containing the response as JsonObject
+   * @return Future containing the response as String
    */
-  public Future<JsonObject> sendPostRequest(
-      String host, String path, JsonObject body, int port, MultiMap headers) {
-    Promise<JsonObject> promise = Promise.promise();
+  public Future<String> sendGetRequestRaw(
+      String host, String path, MultiMap queryParams, int port) {
+    Promise<String> promise = Promise.promise();
 
-    logger.debug("Sending POST request to {}:{}{} with body: {}", host, port, path, body);
+    logger.debug("Sending GET request to {}:{}{}", host, port, path);
 
-    HttpRequest<Buffer> request =
-        webClient.post(port, host, path).ssl(true).putHeader("Content-Type", "application/json");
+    HttpRequest<Buffer> request = webClient.get(port, host, path).ssl(true);
 
-    // Add headers if provided
-    if (headers != null && !headers.isEmpty()) {
-      request = request.putHeaders(headers);
+    // Add query parameters
+    if (queryParams != null && !queryParams.isEmpty()) {
+      for (var entry : queryParams.entries()) {
+        request = request.setQueryParam(entry.getKey(), entry.getValue());
+      }
     }
 
-    request.sendJsonObject(
-        body,
+    request.send(
         ar -> {
           if (ar.succeeded()) {
             try {
               String responseBody = ar.result().bodyAsString();
-              logger.debug("Received response: {}", responseBody);
-
-              JsonObject jsonResponse = new JsonObject(responseBody);
-              promise.complete(jsonResponse);
+              logger.debug("Received raw response: {}", responseBody);
+              promise.complete(responseBody);
             } catch (Exception e) {
-              logger.error("Failed to parse response as JSON", e);
-              promise.fail(new RuntimeException("Failed to parse response", e));
+              logger.error("Failed to get response body", e);
+              promise.fail(new RuntimeException("Failed to get response body", e));
             }
           } else {
-            logger.error("HTTP POST request failed", ar.cause());
+            logger.error("HTTP request failed", ar.cause());
             promise.fail(ar.cause());
           }
         });
@@ -137,10 +134,4 @@ public class HttpClientUtil {
     return promise.future();
   }
 
-  /** Closes the underlying WebClient. */
-  public void close() {
-    if (webClient != null) {
-      webClient.close();
-    }
-  }
 }
