@@ -34,6 +34,11 @@ public class ApplicationConfig {
   public static final String CONTENT_TYPE_JSON = "application/json";
   public static final String CONTENT_TYPE_TEXT = "text/plain";
 
+  // Cache Configuration (in milliseconds)
+  public static final long AIR_POLLUTION_CACHE_TTL_MS = 1 * 60 * 60 * 1000L; // 1 hour
+  public static final long WEATHER_CACHE_TTL_MS = 10 * 60 * 1000L; // 10 minutes
+  public static final long GEOCODING_CACHE_TTL_MS = 12 * 60 * 60 * 1000L; // 12 hours
+
   private ApplicationConfig() {
     // Utility class - prevent instantiation
   }
