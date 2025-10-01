@@ -78,13 +78,6 @@
             <version>5.10.0</version>
             <scope>test</scope>
         </dependency>
-
-        <!-- JUnit 5 and Vertx Test Integration -->
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter-api</artifactId>
-            <scope>test</scope>
-        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
