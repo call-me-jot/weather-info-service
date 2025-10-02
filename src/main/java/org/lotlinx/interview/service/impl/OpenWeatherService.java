@@ -83,17 +83,17 @@ public class OpenWeatherService implements WeatherService, AutoCloseable {
     );
     this.airPollutionCache = new InMemoryCache<>(
         "air_pollution", 
-        ApplicationConfig.AIR_POLLUTION_CACHE_TTL_MS, 
+        ApplicationConfig.getAirPollutionCacheTtlMs(), 
         vertx
     );
     this.weatherCache = new InMemoryCache<>(
         "weather", 
-        ApplicationConfig.WEATHER_CACHE_TTL_MS, 
+        ApplicationConfig.getWeatherCacheTtlMs(), 
         vertx
     );
     this.geocodingCache = new InMemoryCache<>(
         "geocoding", 
-        ApplicationConfig.GEOCODING_CACHE_TTL_MS, 
+        ApplicationConfig.getGeocodingCacheTtlMs(), 
         vertx
     );
   }

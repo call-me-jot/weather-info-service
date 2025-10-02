@@ -3,14 +3,29 @@ package org.lotlinx.interview.config;
 /** Application configuration constants and settings. */
 public class ApplicationConfig {
 
+  private static final ConfigLoader configLoader = ConfigLoader.getInstance();
+
   // Server Configuration
-  public static final int SERVER_PORT = 8080;
-  public static final String SERVER_HOST = "0.0.0.0";
+  public static int getServerPort() {
+    return configLoader.getServerPort();
+  }
+
+  public static String getServerHost() {
+    return configLoader.getServerHost();
+  }
 
   // OpenWeatherMap API Configuration
-  public static final String OPENWEATHER_API_HOST = "api.openweathermap.org";
-  public static final String OPENWEATHER_API_KEY = "41cf5baac73f77483f69170a1e2d32e6";
-  public static final int OPENWEATHER_API_PORT = 443;
+  public static String getOpenWeatherApiHost() {
+    return configLoader.getOpenWeatherHost();
+  }
+
+  public static String getOpenWeatherApiKey() {
+    return configLoader.getOpenWeatherApiKey();
+  }
+
+  public static int getOpenWeatherApiPort() {
+    return configLoader.getOpenWeatherPort();
+  }
   
   // OpenWeatherMap API Paths
   public static final String AIR_POLLUTION_API_PATH = "/data/2.5/air_pollution";
@@ -35,9 +50,17 @@ public class ApplicationConfig {
   public static final String CONTENT_TYPE_TEXT = "text/plain";
 
   // Cache Configuration (in milliseconds)
-  public static final long AIR_POLLUTION_CACHE_TTL_MS = 1 * 60 * 60 * 1000L; // 1 hour
-  public static final long WEATHER_CACHE_TTL_MS = 10 * 60 * 1000L; // 10 minutes
-  public static final long GEOCODING_CACHE_TTL_MS = 12 * 60 * 60 * 1000L; // 12 hours
+  public static long getAirPollutionCacheTtlMs() {
+    return configLoader.getAirPollutionCacheTtl();
+  }
+
+  public static long getWeatherCacheTtlMs() {
+    return configLoader.getWeatherCacheTtl();
+  }
+
+  public static long getGeocodingCacheTtlMs() {
+    return configLoader.getGeocodingCacheTtl();
+  }
 
   private ApplicationConfig() {
     // Utility class - prevent instantiation

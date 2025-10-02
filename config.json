@@ -1,0 +1,24 @@
+{
+  "openweather": {
+    "apiKey": "41cf5baac73f77483f69170a1e2d32e6",
+    "host": "api.openweathermap.org",
+    "port": 443
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080
+  },
+  "cache": {
+    "airPollutionTtlMs": 3600000,
+    "weatherTtlMs": 600000,
+    "geocodingTtlMs": 43200000
+  },
+  "circuitBreaker": {
+    "failureThreshold": 5,
+    "timeoutMs": 10000,
+    "retryTimeoutMs": 60000
+  },
+  "rateLimiter": {
+    "dailyLimit": 1000
+  }
+}

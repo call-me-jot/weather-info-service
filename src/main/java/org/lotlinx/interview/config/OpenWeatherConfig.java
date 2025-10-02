@@ -10,10 +10,10 @@ public class OpenWeatherConfig {
   private final int timeoutMs;
 
   public OpenWeatherConfig() {
-    this.apiKey = ApplicationConfig.OPENWEATHER_API_KEY;
-    this.host = ApplicationConfig.OPENWEATHER_API_HOST;
+    this.apiKey = ApplicationConfig.getOpenWeatherApiKey();
+    this.host = ApplicationConfig.getOpenWeatherApiHost();
     this.path = ApplicationConfig.AIR_POLLUTION_API_PATH;
-    this.port = ApplicationConfig.OPENWEATHER_API_PORT;
+    this.port = ApplicationConfig.getOpenWeatherApiPort();
     this.timeoutMs = ApplicationConfig.HTTP_TIMEOUT_MS;
   }
 
@@ -44,20 +44,20 @@ public class OpenWeatherConfig {
   /** Creates a configuration for the Geocoding API. */
   public static OpenWeatherConfig forGeocoding() {
     return new OpenWeatherConfig(
-        ApplicationConfig.OPENWEATHER_API_KEY,
-        ApplicationConfig.OPENWEATHER_API_HOST,
+        ApplicationConfig.getOpenWeatherApiKey(),
+        ApplicationConfig.getOpenWeatherApiHost(),
         ApplicationConfig.GEOCODING_API_PATH,
-        ApplicationConfig.OPENWEATHER_API_PORT,
+        ApplicationConfig.getOpenWeatherApiPort(),
         ApplicationConfig.HTTP_TIMEOUT_MS);
   }
 
   /** Creates a configuration for the Current Weather API. */
   public static OpenWeatherConfig forCurrentWeather() {
     return new OpenWeatherConfig(
-        ApplicationConfig.OPENWEATHER_API_KEY,
-        ApplicationConfig.OPENWEATHER_API_HOST,
+        ApplicationConfig.getOpenWeatherApiKey(),
+        ApplicationConfig.getOpenWeatherApiHost(),
         ApplicationConfig.CURRENT_WEATHER_API_PATH,
-        ApplicationConfig.OPENWEATHER_API_PORT,
+        ApplicationConfig.getOpenWeatherApiPort(),
         ApplicationConfig.HTTP_TIMEOUT_MS);
   }
 }
