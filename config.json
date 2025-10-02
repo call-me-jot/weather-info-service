@@ -1,0 +1,24 @@
+{
+  "server": {
+    "port": 8080,
+    "host": "0.0.0.0"
+  },
+  "openweather": {
+    "apiKey": "41cf5baac73f77483f69170a1e2d32e6",
+    "host": "api.openweathermap.org",
+    "port": 443
+  },
+  "api": {
+    "version": "v1",
+    "endpoints": {
+      "hello": "/hello",
+      "airPollution": "/getCurrentAirPollution",
+      "multiCityWeather": "/api/v1/weather/multi-city"
+    }
+  },
+  "cache": {
+    "airPollutionTtlMs": 3600000,
+    "weatherTtlMs": 600000,
+    "geocodingTtlMs": 43200000
+  }
+}

@@ -59,6 +59,9 @@ public class WeatherController {
                 }
               });
 
+    } catch (IllegalArgumentException e) {
+      logger.warn("Invalid parameters for air pollution request: {}", e.getMessage());
+      sendErrorResponse(context, 400, e.getMessage());
     } catch (Exception e) {
       logger.error("Unexpected error in air pollution handler", e);
       sendErrorResponse(context, 500, e.getMessage());
@@ -125,11 +128,6 @@ public class WeatherController {
     }
     
     JsonArray citiesArray = jsonBody.getJsonArray("cities");
-    if (citiesArray.isEmpty()) {
-      sendErrorResponse(context, 400, "Request body must contain a non-empty 'cities' array");
-      return null;
-    }
-    
     // Convert to List<String> with validation
     List<String> cities = new ArrayList<>();
     for (int i = 0; i < citiesArray.size(); i++) {
@@ -248,17 +246,19 @@ public class WeatherController {
   }
 
   /** Extracts a double query parameter from the request. */
-  private double getQueryParameterDouble(String param, RoutingContext context) {
+  private double getQueryParameterDouble(String param, RoutingContext context) 
+      throws IllegalArgumentException {
     String paramValue = context.request().getParam(param);
-    if (paramValue != null && !paramValue.isEmpty()) {
-      try {
-        return Double.parseDouble(paramValue);
-      } catch (NumberFormatException e) {
-        logger.warn("Invalid number format for parameter '{}': {}", param, paramValue);
-        return -1.0;
-      }
+    
+    if (paramValue == null || paramValue.isEmpty()) {
+      throw new IllegalArgumentException("Missing required parameter: " + param);
     }
-    return -1.0;
+    
+    try {
+      return Double.parseDouble(paramValue);
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException("Invalid number format for parameter '" + param + "': " + paramValue);
+    }
   }
 
 }

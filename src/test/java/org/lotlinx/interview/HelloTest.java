@@ -33,8 +33,7 @@ public class HelloTest {
   @Test
   void get_hello_endpoint(Vertx vertx, VertxTestContext testContext) {
     WebClient client = WebClient.create(vertx);
-    String testUrl =
-        "http://localhost:" + ApplicationConfig.SERVER_PORT + ApplicationConfig.HELLO_ENDPOINT;
+    String testUrl = "http://localhost:8080/hello";
 
     logger.info("Testing hello endpoint: {}", testUrl);
 

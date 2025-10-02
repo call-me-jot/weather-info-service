@@ -46,23 +46,23 @@ public class ApiRouter {
   /** Sets up all API routes. */
   private void setupRoutes(Router router) {
     // Health check endpoint
-    router.get(ApplicationConfig.HELLO_ENDPOINT).handler(weatherController::handleHello);
+    router.get(ApplicationConfig.getHelloEndpoint()).handler(weatherController::handleHello);
 
     // Air pollution endpoint
     router
-        .get(ApplicationConfig.AIR_POLLUTION_ENDPOINT)
+        .get(ApplicationConfig.getAirPollutionEndpoint())
         .handler(weatherController::handleAirPollution);
 
     // Multi-city weather endpoint
     router
-        .post(ApplicationConfig.MULTI_CITY_WEATHER_ENDPOINT)
+        .post(ApplicationConfig.getMultiCityWeatherEndpoint())
         .handler(weatherController::handleMultiCityWeather);
 
-    logger.debug(
+    logger.info(
         "Routes configured: {}, {}, {}",
-        ApplicationConfig.HELLO_ENDPOINT,
-        ApplicationConfig.AIR_POLLUTION_ENDPOINT,
-        ApplicationConfig.MULTI_CITY_WEATHER_ENDPOINT);
+        ApplicationConfig.getHelloEndpoint(),
+        ApplicationConfig.getAirPollutionEndpoint(),
+        ApplicationConfig.getMultiCityWeatherEndpoint());
   }
 
   /** Sets up global error handling for the router. */

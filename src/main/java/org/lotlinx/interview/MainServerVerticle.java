@@ -27,13 +27,13 @@ public class MainServerVerticle extends AbstractVerticle {
       vertx
           .createHttpServer()
           .requestHandler(router)
-          .listen(ApplicationConfig.SERVER_PORT, ApplicationConfig.SERVER_HOST)
+          .listen(ApplicationConfig.getServerPort(), ApplicationConfig.getServerHost())
           .onSuccess(
               server -> {
                 logger.info(
                     "HTTP server started successfully on {}:{}",
-                    ApplicationConfig.SERVER_HOST,
-                    ApplicationConfig.SERVER_PORT);
+                    ApplicationConfig.getServerHost(),
+                    ApplicationConfig.getServerPort());
                 startPromise.complete();
               })
           .onFailure(

@@ -4,13 +4,26 @@ package org.lotlinx.interview.config;
 public class ApplicationConfig {
 
   // Server Configuration
-  public static final int SERVER_PORT = 8080;
-  public static final String SERVER_HOST = "0.0.0.0";
+  public static int getServerPort() {
+    return ConfigLoader.getServerPort();
+  }
+  
+  public static String getServerHost() {
+    return ConfigLoader.getServerHost();
+  }
 
   // OpenWeatherMap API Configuration
-  public static final String OPENWEATHER_API_HOST = "api.openweathermap.org";
-  public static final String OPENWEATHER_API_KEY = "41cf5baac73f77483f69170a1e2d32e6";
-  public static final int OPENWEATHER_API_PORT = 443;
+  public static String getOpenWeatherApiHost() {
+    return ConfigLoader.getOpenWeatherApiHost();
+  }
+  
+  public static String getOpenWeatherApiKey() {
+    return ConfigLoader.getOpenWeatherApiKey();
+  }
+  
+  public static int getOpenWeatherApiPort() {
+    return ConfigLoader.getOpenWeatherApiPort();
+  }
   
   // OpenWeatherMap API Paths
   public static final String AIR_POLLUTION_API_PATH = "/data/2.5/air_pollution";
@@ -21,14 +34,44 @@ public class ApplicationConfig {
   public static final int GLOBAL_SLEEP_TIME_MS = 500;
   public static final int HTTP_TIMEOUT_MS = 10000;
 
+  // API Versioning
+  public static String getApiVersion() {
+    return ConfigLoader.getApiVersion();
+  }
+  
+  public static String getApiBasePath() {
+    return ConfigLoader.getApiBasePath();
+  }
+
   // API Endpoints
-  public static final String HELLO_ENDPOINT = "/hello";
-  public static final String AIR_POLLUTION_ENDPOINT = "/getCurrentAirPollution";
-  public static final String MULTI_CITY_WEATHER_ENDPOINT = "/getMultiCityWeather";
+  public static String getHelloEndpoint() {
+    return ConfigLoader.getHelloEndpoint();
+  }
+  
+  public static String getAirPollutionEndpoint() {
+    return ConfigLoader.getAirPollutionEndpoint();
+  }
+  
+  public static String getMultiCityWeatherEndpoint() {
+    return ConfigLoader.getMultiCityWeatherEndpoint();
+  }
 
   // Content Types
   public static final String CONTENT_TYPE_JSON = "application/json";
   public static final String CONTENT_TYPE_TEXT = "text/plain";
+
+  // Cache Configuration (in milliseconds)
+  public static long getAirPollutionCacheTtl() {
+    return ConfigLoader.getAirPollutionCacheTtl();
+  }
+  
+  public static long getWeatherCacheTtl() {
+    return ConfigLoader.getWeatherCacheTtl();
+  }
+  
+  public static long getGeocodingCacheTtl() {
+    return ConfigLoader.getGeocodingCacheTtl();
+  }
 
   private ApplicationConfig() {
     // Utility class - prevent instantiation
